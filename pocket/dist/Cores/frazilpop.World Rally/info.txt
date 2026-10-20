@@ -1,0 +1,4 @@
+MC68000 @ 12 MHz, DS5002FP @ 12 MHz, two TPC1020 video FPGAs, OKI M6295
+
+Based on jlrh/gaelco-fpga cores/wrally (GPL-3.0).
+Analogue Pocket port by Frazilpop.
