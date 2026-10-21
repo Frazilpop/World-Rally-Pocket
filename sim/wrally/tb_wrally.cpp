@@ -436,6 +436,7 @@ int main(int argc, char** argv) {
     long mcu_f = 0;
     bool irq_prev = false;
     long spr_len = 0, spr_max = 0, spr_cut = 0, spr_cut_at = 512;
+    long tm_late = 0, diag_cut = 0;      // the shell's overlay flags 12 and 11, as it counts them
 
     while (frame < frames) {
         serve_rom();
@@ -455,6 +456,7 @@ int main(int argc, char** argv) {
             audio_n++;
         }
         bclk += R.wrally_board__DOT__dbg_cen;
+        if (frame >= 2) { tm_late += t->diag_tm_ovr; diag_cut += t->diag_spr_cut; }
         if ((int)t->diag_owed > owed_max) owed_max = t->diag_owed;
         lost += R.wrally_board__DOT__dbg_lost;
         if (ticks && R.wrally_board__DOT__dbg_irq) fprintf(ticks, "# irq %llu\n", (unsigned long long)bclk);
@@ -588,6 +590,7 @@ int main(int argc, char** argv) {
     fprintf(stderr, "sprites: longest line %ld clocks, %ld lines cut", spr_max, spr_cut);
     if (spr_cut) fprintf(stderr, " (the lowest at sprite %ld)", spr_cut_at);
     fprintf(stderr, "\n");
+    fprintf(stderr, "overlay from frame 2: tilemap fetches late %ld, sprite lines cut %ld\n", tm_late, diag_cut);
 #ifdef SDR_REAL
     fprintf(stderr, "SDRAM protocol violations: %u\n", sd->violations);
 #endif

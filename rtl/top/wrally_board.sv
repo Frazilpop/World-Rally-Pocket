@@ -83,9 +83,13 @@ module wrally_board #(
     input  wire        pause,
 
     // For the platform's diagnostics: board time behind wall time (ticks),
-    // IRQ 6's tick.
+    // IRQ 6's tick, a sprite line begun before the last was drawn (its SDRAM
+    // fetches did not finish in a line), a tilemap that moved on to its next
+    // tile half before the SDRAM brought the last.
     output wire [11:0] diag_owed,
-    output wire        diag_irq
+    output wire        diag_irq,
+    output wire        diag_spr_cut,
+    output wire        diag_tm_ovr
 );
 
 // SDRAM regions, word addresses
@@ -235,6 +239,14 @@ wrally_romport #(.AW(SDR_AW)) u_rp_oki (
 );
 wire [7:0] oki_byte = oki_line[8*oki_ra[2:0] +: 8];
 
+// A tilemap's request still out when the address it wants has moved on: the
+// half it asked for never reached the pixels.
+wire tm_late = (rom_req[1] && gfx_line(tm0_a) != rom_addr[1]) ||
+               (rom_req[2] && gfx_line(tm1_a) != rom_addr[2]);
+reg  tm_late_q = 1'b0;
+always @(posedge clk) tm_late_q <= tm_late;
+assign diag_tm_ovr = tm_late & ~tm_late_q;
+
 // the four planes of the half the address names
 function automatic [31:0] gfx_planes(input [63:0] line, input h);
     gfx_planes = h ? line[63:32] : line[31:0];      // {p3, p2, p1, p0}
@@ -330,7 +342,7 @@ wrally_video_top u_video (
     .spr_gfx_ok(spr_ok), .spr_en(1'b1),
     .vga_r(r), .vga_g(g), .vga_b(b),
     .hsync(hs), .vsync(vs), .hblank(hblank), .vblank(vblank), .de(),
-    .ce_pix_o(), .vblank_irq(vblank_irq)
+    .ce_pix_o(), .vblank_irq(vblank_irq), .spr_cut(diag_spr_cut)
 );
 assign diag_irq = board_irq;
 

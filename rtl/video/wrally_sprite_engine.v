@@ -35,15 +35,23 @@ module wrally_sprite_engine (
     reg [3:0]  color_r, gpy_r, px;
     reg [13:0] code_r;
 
-    reg [11:0] lb0 [0:367];
-    reg [11:0] lb1 [0:367];
-    reg       lb0h [0:367];
-    reg       lb1h [0:367];
+    // The two line buffers, {high, pixel} a word: one block RAM each, one
+    // write port and one registered read port. jlrh read them
+    // combinationally (the display's pixel, and the pixel under a shadow
+    // being drawn), which Quartus can only build from registers. The bank
+    // being drawn and the bank on show are never the same, so each RAM's
+    // read port serves whichever its bank is: the display's address (hpos,
+    // steady for a pixel's six clocks, so the word read on the clock before
+    // ce_pix is the one jlrh's read gave on it), or the drawing's, issued a
+    // clock ahead for the pixel drawn next (below).
+    (* ramstyle = "no_rw_check" *) reg [12:0] lb0 [0:367];
+    (* ramstyle = "no_rw_check" *) reg [12:0] lb1 [0:367];
+    reg [12:0] lb0_q, lb1_q;
     reg       wbank_r;
     reg       high_r;
     reg       shad_r;
-    assign lb_q    = rbank ? lb1[lb_x[8:0]]  : lb0[lb_x[8:0]];
-    assign lb_high = rbank ? lb1h[lb_x[8:0]] : lb0h[lb_x[8:0]];
+    assign lb_q    = rbank ? lb1_q[11:0] : lb0_q[11:0];
+    assign lb_high = rbank ? lb1_q[12]   : lb0_q[12];
 
     assign spr_a = (state==CLR && clr_i==10'd367) ? 11'd3 :
                    (state==NEXT) ? (spr_idx + 11'd4) :
@@ -64,7 +72,13 @@ module wrally_sprite_engine (
                                 : {1'b0, 3'd0, color_r, pen};
 
     wire [9:0]  lb_wa    = (xpos - 10'd8);
-    wire [11:0] lb_cur   = wbank_r ? lb1[lb_wa] : lb0[lb_wa];
+    // The pixel under the one drawn now was read on the clock before: in
+    // PWR the next pixel is px + 1, in PADDR (at least one clock before
+    // every PWR run, with the sprite's x already loaded) it is px. A pixel's
+    // write never lands on the address read for the next.
+    wire [3:0]  px_n     = (state == PWR) ? px + 4'd1 : px;
+    wire [9:0]  lb_ra    = ((((sx_r + {6'b0, px_n}) & 10'h3ff) - 10'd15) & 10'h3ff) - 10'd8;
+    wire [12:0] lb_cur   = wbank_r ? lb1_q : lb0_q;
     // A shadow over a pixel already drawn (a sprite's or another shadow's)
     // keeps that pixel's pen and priority and ORs its level in, as MAME's
     // gaelco_wrally_sprites does (jlrh's replaced a shadow's level and
@@ -72,6 +86,10 @@ module wrally_sprite_engine (
     wire        cur_any  = lb_cur[11] || (lb_cur[3:0] != 4'd0);
     wire [11:0] lb_mrg   = (shad_r && cur_any) ? {1'b1, lb_cur[10:8] | pen[2:0], lb_cur[7:0]} : lb_wd;
     wire        lb_keep  = shad_r && cur_any;
+
+    wire        lb_we  = (state == CLR) || (state == PWR && spr_on && xin);
+    wire [8:0]  lb_wa9 = (state == CLR) ? clr_i[8:0] : lb_wa[8:0];
+    wire [12:0] lb_wd9 = (state == CLR) ? 13'd0 : {lb_keep ? lb_cur[12] : high_r, lb_mrg};
 
     // A sprite none of whose 16 pixels lands in x 8-375 is passed over
     // without its fetches: the game parks its unused slots (all ffff) at
@@ -88,14 +106,11 @@ module wrally_sprite_engine (
     wire [8:0] py0    = (line_r - {1'b0, sy0}) & 9'h1ff;
     wire       online0= (py0 < 9'd16);
 
-    always @(posedge clk) if (ce) begin
-        if (state==CLR) begin
-            if (wbank_r) begin lb1[clr_i[8:0]] <= 12'd0; lb1h[clr_i[8:0]] <= 1'b0; end
-            else         begin lb0[clr_i[8:0]] <= 12'd0; lb0h[clr_i[8:0]] <= 1'b0; end
-        end else if (state==PWR && spr_on && xin) begin
-            if (wbank_r) begin lb1[lb_wa] <= lb_mrg; if(!lb_keep) lb1h[lb_wa] <= high_r; end
-            else         begin lb0[lb_wa] <= lb_mrg; if(!lb_keep) lb0h[lb_wa] <= high_r; end
-        end
+    always @(posedge clk) begin
+        if (ce && lb_we && !wbank_r) lb0[lb_wa9] <= lb_wd9;
+        if (ce && lb_we &&  wbank_r) lb1[lb_wa9] <= lb_wd9;
+        lb0_q <= lb0[!wbank_r ? lb_ra[8:0] : lb_x[8:0]];
+        lb1_q <= lb1[ wbank_r ? lb_ra[8:0] : lb_x[8:0]];
     end
 
     always @(posedge clk) if (ce) begin
@@ -137,7 +152,7 @@ module wrally_sprite_engine (
     // synthesis translate_off
     integer k;
     initial begin state=IDLE; busy=0; done=0; spr_idx=3; px=0; clr_i=0; wbank_r=0; high_r=0; shad_r=0;
-        for (k=0;k<368;k=k+1) begin lb0[k]=0; lb1[k]=0; lb0h[k]=0; lb1h[k]=0; end end
+        for (k=0;k<368;k=k+1) begin lb0[k]=0; lb1[k]=0; end lb0_q=0; lb1_q=0; end
     // synthesis translate_on
 endmodule
 

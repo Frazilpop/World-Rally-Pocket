@@ -31,7 +31,8 @@ module wrally_video_top #(
     output wire [7:0]  vga_r, vga_g, vga_b,
     output wire        hsync, vsync, hblank, vblank, de,
     output wire        ce_pix_o,
-    output wire        vblank_irq
+    output wire        vblank_irq,
+    output wire        spr_cut      // a sprite line cut short (the platform's diagnostics)
 );
 
     localparam integer GFXLEAD = 7;
@@ -72,7 +73,7 @@ module wrally_video_top #(
         .spr_a(spr_a), .spr_q(spr_q),
         .rom_a(srom_a), .d_i07(sd_i07), .d_i09(sd_i09), .d_i11(sd_i11), .d_i13(sd_i13),
         .gfx_ok(spr_gfx_ok),
-        .lb_q(sp_lbq), .lb_high(sp_lbq_high), .busy()
+        .lb_q(sp_lbq), .lb_high(sp_lbq_high), .busy(), .cut(spr_cut)
     );
 
     localparam integer SPN = 3 + SPADJ + GFXLEAD;

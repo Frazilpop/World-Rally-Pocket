@@ -19,7 +19,8 @@ module wrally_sprite_layer #(
 
     output wire [11:0] lb_q,
     output wire        lb_high,
-    output wire        busy
+    output wire        busy,
+    output wire        cut          // a line began with the last unfinished
 );
 
     reg [8:0] vpos_d;
@@ -36,6 +37,8 @@ module wrally_sprite_layer #(
         if (rst) start <= 1'b0;
         else     start <= line_change;
     end
+
+    assign cut = start & busy;
 
     wrally_sprite_engine u_spr (
         .clk(clk), .ce(1'b1), .gfx_ok(gfx_ok),
