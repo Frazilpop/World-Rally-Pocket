@@ -5,7 +5,7 @@
 //       [--rom-lat N] [--trace file] [--trace-count N] [--trace-from F]
 //       [--mcu-trace file] [--data-only] [--inputs plan.txt] [--dsw hex]
 //       [--release N] [--gen-dir dir] [--ticks file] [--audio file]
-//       [--wlog file] [--mem-dump frames]
+//       [--wlog file] [--mem-dump frames] [--scene dumpdir]
 //
 // Hosts wrally_board the way the Pocket shell does, with a behavioural
 // SDRAM: the .rom image on five independent line ports, fixed latency
@@ -36,15 +36,26 @@
 // Writes frame_NNNNN.ppm (368 x 232) for each requested frame and one line
 // a frame to stats.csv: the video line IRQ 6 fell on (232 = vblank's first),
 // the most board time owed in the frame (ticks; 4095 = the credit full,
-// ticks dropped), the ticks lost and each port's longest wait.
+// ticks dropped), the ticks lost and each port's longest wait. At the end:
+// the sprite engine's longest line in 48 MHz clocks (of the line's 3,077),
+// and the lines it had not finished when the next began, with the lowest
+// sprite it had reached on one (511 the last; MAME draws all 511 on every
+// line).
 // --wlog writes every 68000 write to the VRAM, the vregs, the palette and the
-// sprite RAM with the video line and pixel it landed on:
-// "<frame> <line> <pixel> <addr> <data> <mask>".
-// --mem-dump N,M,... writes vram_NNNNN.bin, palette_NNNNN.bin and
-// spriteram_NNNNN.bin at frame N's IRQ, as tools/mame_wrally_dump.lua's
-// vram.bin, palette.bin and spriteram.bin at its notifier N (little-endian
-// words; the VRAM decrypted): shadows kept from the 68000's writes, the VRAM's
-// with the word jlrh's decryption made of each.
+// sprite RAM with the video line and pixel it landed on and the word stored
+// after it (the VRAM's decrypted; 0 for the IRQ clear):
+// "<frame> <line> <pixel> <addr> <data> <mask> <stored>".
+// --mem-dump N,M,... writes vram_NNNNN.bin, palette_NNNNN.bin,
+// spriteram_NNNNN.bin and vregs_NNNNN.bin at frame N's IRQ, as
+// tools/mame_wrally_dump.lua's vram.bin, palette.bin, spriteram.bin and
+// vregs.bin at its notifier N (little-endian words; the VRAM decrypted):
+// shadows kept from the 68000's writes, the VRAM's with the word jlrh's
+// decryption made of each.
+// --scene draws a MAME dump (tools/mame_wrally_dump.lua: vram.bin,
+// palette.bin, spriteram.bin, vregs.bin) instead of running the game:
+// board time paused from release, the dump written into the VRAM, the
+// palette, the sprite RAM and the vregs, and `frames` counted in video
+// frames; frame 3 on is the dump's picture, to set against its screen.png.
 // --audio writes the OKI's samples (jt6295's 48 kHz strobe) as raw signed
 // 16-bit little-endian mono.
 
@@ -108,7 +119,7 @@ int main(int argc, char** argv) {
     std::string outdir = absolute(argv[3]);
     std::set<int> dumps, mem_dumps;
     int rom_lat = 10;
-    std::string trace_path, mcu_path, ticks_path, inputs_path, audio_path, wlog_path, gen_dir = absolute("build/gen");
+    std::string trace_path, mcu_path, ticks_path, inputs_path, audio_path, wlog_path, scene_dir, gen_dir = absolute("build/gen");
     long trace_count = 0;
     int trace_from = 0;
     bool data_only = false;
@@ -128,6 +139,7 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--gen-dir") && i + 1 < argc)     gen_dir = absolute(argv[++i]);
         else if (!strcmp(argv[i], "--audio") && i + 1 < argc)       audio_path = absolute(argv[++i]);
         else if (!strcmp(argv[i], "--wlog") && i + 1 < argc)        wlog_path = absolute(argv[++i]);
+        else if (!strcmp(argv[i], "--scene") && i + 1 < argc)       scene_dir = absolute(argv[++i]);
         else if (!strcmp(argv[i], "--mem-dump") && i + 1 < argc) {
             std::string s = argv[++i];
             size_t p = 0;
@@ -269,7 +281,39 @@ int main(int argc, char** argv) {
         while (!seen) { tick(); if (R.wrally_board__DOT__dbg_vbirq) { seen = true; at = cyc; } }
         while (cyc < at + (uint64_t)release) tick();
     }
+    const bool scene = !scene_dir.empty();
+    if (scene) t->pause = 1;
     t->rom_loaded = 1;
+    if (scene) {
+        auto load = [&](const char* name, int sel, int words) {
+            std::vector<uint8_t> d(words * 2, 0);
+            FILE* f = fopen((scene_dir + "/" + name).c_str(), "rb");
+            if (!f) { perror(name); exit(1); }
+            size_t n = fread(d.data(), 1, d.size(), f);
+            fclose(f);
+            for (int w = 0; w < (int)(n / 2); w++) {
+                uint16_t v = d[2 * w] | (d[2 * w + 1] << 8);
+                if (sel < 3) {
+                    R.wrally_board__DOT__u_vmem__DOT__sc_we = 1;
+                    R.wrally_board__DOT__u_vmem__DOT__sc_sel = sel;
+                    R.wrally_board__DOT__u_vmem__DOT__sc_addr = w;
+                    R.wrally_board__DOT__u_vmem__DOT__sc_data = v;
+                } else {
+                    R.wrally_board__DOT__u_main__DOT__sc_vwe = 1;
+                    R.wrally_board__DOT__u_main__DOT__sc_vsel = w;
+                    R.wrally_board__DOT__u_main__DOT__sc_vdata = v;
+                }
+                tick();
+            }
+            R.wrally_board__DOT__u_vmem__DOT__sc_we = 0;
+            R.wrally_board__DOT__u_main__DOT__sc_vwe = 0;
+        };
+        load("vram.bin", 0, 0x2000);
+        load("palette.bin", 1, 0x2000);
+        load("spriteram.bin", 2, 0x800);
+        load("vregs.bin", 3, 4);
+        fprintf(stderr, "scene %s loaded\n", scene_dir.c_str());
+    }
     const uint64_t cyc0 = cyc;
     fprintf(stderr, "CPUs released at clock %llu\n", (unsigned long long)cyc0);
 
@@ -341,7 +385,7 @@ int main(int argc, char** argv) {
     bool as_prev = false;
     uint32_t c_addr = 0, c_data = 0, c_mask = 0, c_dec = 0; bool c_rd = false;
     // the video memories as the 68000 wrote them (--mem-dump)
-    std::vector<uint16_t> sh_vram(0x2000, 0), sh_pal(0x2000, 0), sh_spr(0x800, 0);
+    std::vector<uint16_t> sh_vram(0x2000, 0), sh_pal(0x2000, 0), sh_spr(0x800, 0), sh_vregs(4, 0);
     auto shadow = [&](std::vector<uint16_t>& m, uint32_t i, uint32_t d) {
         m[i] = (m[i] & ~c_mask) | (d & c_mask);
     };
@@ -353,7 +397,7 @@ int main(int argc, char** argv) {
             for (uint16_t w : m) { uint8_t b[2] = { (uint8_t)w, (uint8_t)(w >> 8) }; fwrite(b, 1, 2, f); }
             fclose(f);
         };
-        put("vram", sh_vram); put("palette", sh_pal); put("spriteram", sh_spr);
+        put("vram", sh_vram); put("palette", sh_pal); put("spriteram", sh_spr); put("vregs", sh_vregs);
     };
     // the DS5002: an access is a run of clocks with the same address and
     // direction. A read is written with the byte jt8051 took (dbg_x_take),
@@ -390,10 +434,20 @@ int main(int argc, char** argv) {
     uint64_t bus_cycles = 0, bus_cycles_f = 0;
     long mcu_f = 0;
     bool irq_prev = false;
+    long spr_len = 0, spr_max = 0, spr_cut = 0, spr_cut_at = 512;
 
     while (frame < frames) {
         serve_rom();
         tick();
+        // ---- the sprite engine's line
+        if (R.wrally_board__DOT__dbg_spr_start) {
+            if (R.wrally_board__DOT__dbg_spr_busy) {
+                spr_cut++;
+                long at = (R.wrally_board__DOT__dbg_spr_idx - 3) / 4;
+                if (at < spr_cut_at) spr_cut_at = at;
+            }
+            spr_len = 0;
+        } else if (R.wrally_board__DOT__dbg_spr_busy && ++spr_len > spr_max) spr_max = spr_len;
         if (audio && t->snd_sample) {
             int16_t s = (int16_t)t->snd;
             fwrite(&s, 2, 1, audio);
@@ -417,17 +471,21 @@ int main(int argc, char** argv) {
             }
             if (!as && as_prev) {
                 bus_cycles++;
+                uint32_t stored = 0;
                 if (!c_rd && c_mask) {
-                    if (c_addr >= 0x100000 && c_addr < 0x104000) shadow(sh_vram, (c_addr >> 1) & 0x1fff, c_dec);
-                    else if (c_addr >= 0x200000 && c_addr < 0x204000) shadow(sh_pal, (c_addr >> 1) & 0x1fff, c_data);
-                    else if (c_addr >= 0x440000 && c_addr < 0x441000) shadow(sh_spr, (c_addr >> 1) & 0x7ff, c_data);
+                    std::vector<uint16_t>* m = nullptr; uint32_t i = 0, d = c_data;
+                    if (c_addr >= 0x100000 && c_addr < 0x104000) { m = &sh_vram; i = (c_addr >> 1) & 0x1fff; d = c_dec; }
+                    else if (c_addr >= 0x108000 && c_addr < 0x108008) { m = &sh_vregs; i = (c_addr >> 1) & 3; }
+                    else if (c_addr >= 0x200000 && c_addr < 0x204000) { m = &sh_pal; i = (c_addr >> 1) & 0x1fff; }
+                    else if (c_addr >= 0x440000 && c_addr < 0x441000) { m = &sh_spr; i = (c_addr >> 1) & 0x7ff; }
+                    if (m) { shadow(*m, i, d); stored = (*m)[i]; }
                 }
                 if (wlog && !c_rd && c_mask &&
                     ((c_addr >= 0x100000 && c_addr < 0x108010) || (c_addr >= 0x200000 && c_addr < 0x204000) ||
                      (c_addr >= 0x440000 && c_addr < 0x441000)))
-                    fprintf(wlog, "%d %d %d %06x %04x %04x\n", frame,
+                    fprintf(wlog, "%d %d %d %06x %04x %04x %04x\n", frame,
                             (int)R.wrally_board__DOT__dbg_vcnt, (int)R.wrally_board__DOT__dbg_hcnt,
-                            c_addr, c_data & c_mask, c_mask);
+                            c_addr, c_data & c_mask, c_mask, stored);
                 if (trace && tracing && c_mask && traced_addr(c_addr)) {
                     fprintf(trace, "%06x %c %04x %04x\n", c_addr, c_rd ? 'R' : 'W', c_data & c_mask, c_mask);
                     traced++;
@@ -510,6 +568,7 @@ int main(int argc, char** argv) {
                     fwrite(img.data(), 1, img.size(), f);
                     fclose(f);
                 }
+                if (scene) { if (frame < 2) spr_max = spr_cut = 0, spr_cut_at = 512; frame++; }
                 y = 0; x = 0;
             }
             prev_hb = hb; prev_vb = vb;
@@ -525,6 +584,9 @@ int main(int argc, char** argv) {
     fprintf(stderr, "board ticks lost %ld, longest waits (clocks) program %d tilemap0 %d tilemap1 %d "
                     "sprites %d oki %d\n",
             lost_all, wait_all[0], wait_all[1], wait_all[2], wait_all[3], wait_all[4]);
+    fprintf(stderr, "sprites: longest line %ld clocks, %ld lines cut", spr_max, spr_cut);
+    if (spr_cut) fprintf(stderr, " (the lowest at sprite %ld)", spr_cut_at);
+    fprintf(stderr, "\n");
 #ifdef SDR_REAL
     fprintf(stderr, "SDRAM protocol violations: %u\n", sd->violations);
 #endif

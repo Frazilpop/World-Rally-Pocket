@@ -92,6 +92,12 @@ module wrally_main (
     );
 
     reg [15:0] vregs[0:3];
+`ifdef VERILATOR
+    // the harness's scene mode: vreg sc_vsel = sc_vdata
+    reg        sc_vwe   /*verilator public_flat_rw*/ = 1'b0;
+    reg [1:0]  sc_vsel  /*verilator public_flat_rw*/ = 2'd0;
+    reg [15:0] sc_vdata /*verilator public_flat_rw*/ = 16'd0;
+`endif
 
     wire [15:0] wram_cpu_q;
     wire [15:0] wram_mcu_q16;
@@ -238,6 +244,9 @@ module wrally_main (
                     if (cs_clrint) irq_pending <= 1'b0;
                 end
             end
+`ifdef VERILATOR
+            if (sc_vwe) vregs[sc_vsel] <= sc_vdata;
+`endif
             if (io_wr) begin
                 if (cs_outlatch) outlatch_stb <= 1'b1;
                 if (cs_okibank)  okibank_stb  <= 1'b1;

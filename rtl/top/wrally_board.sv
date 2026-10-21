@@ -357,6 +357,9 @@ wire        dbg_cen    /*verilator public_flat_rd*/ = cpu_tick;
 wire        dbg_lost   /*verilator public_flat_rd*/ = cpu_lost;
 wire [9:0]  dbg_hcnt   /*verilator public_flat_rd*/ = u_video.u_timing.hcnt;
 wire [8:0]  dbg_vcnt   /*verilator public_flat_rd*/ = u_video.u_timing.vcnt;
+wire        dbg_spr_start /*verilator public_flat_rd*/ = u_video.u_spr.start;
+wire        dbg_spr_busy  /*verilator public_flat_rd*/ = u_video.u_spr.u_spr.busy;
+wire [10:0] dbg_spr_idx   /*verilator public_flat_rd*/ = u_video.u_spr.u_spr.spr_idx;
 `endif
 
 endmodule
