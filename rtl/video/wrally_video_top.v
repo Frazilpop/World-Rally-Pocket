@@ -64,7 +64,10 @@ module wrally_video_top #(
     wire [11:0] sp_lbq;
     wire       sp_lbq_high;
 
-    wrally_sprite_layer #(.VVIS(232), .VTOTAL(250)) u_spr (
+    // VTOTAL is the timing's 260 lines: the line after the last is line 0,
+    // drawn while vpos is 259 into the bank line 0 reads (jlrh's 250 drew
+    // line 276, empty, there, and the top line lost its sprites)
+    wrally_sprite_layer #(.VVIS(232), .VTOTAL(260)) u_spr (
         .clk(clk), .rst(rst), .ce_pix(ce_pix), .vpos(vpos), .hpos(hpos),
         .spr_a(spr_a), .spr_q(spr_q),
         .rom_a(srom_a), .d_i07(sd_i07), .d_i09(sd_i09), .d_i11(sd_i11), .d_i13(sd_i13),
