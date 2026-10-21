@@ -56,8 +56,9 @@
 // board time paused from release, the dump written into the VRAM, the
 // palette, the sprite RAM and the vregs, and `frames` counted in video
 // frames; frame 3 on is the dump's picture, to set against its screen.png.
-// --audio writes the OKI's samples (jt6295's 48 kHz strobe) as raw signed
-// 16-bit little-endian mono.
+// --audio writes the board's sound (jt6295's sum times 16, MAME's level) at
+// jt6295's 48 kHz strobe as raw signed 16-bit little-endian mono, for
+// tools/pocket/match_audio.py against MAME's -wavwrite.
 
 #include "Vwrally_board.h"
 #include "Vwrally_board___024root.h"

@@ -285,9 +285,12 @@ wrally_main u_main (
     .mcu_dl_addr(dsr_dl_addr), .mcu_dl_data(dsr_dl_data), .mcu_dl_we(dsr_dl_we)
 );
 
-// jlrh's level: jt6295's 14 bits times 12, clamped (the sound step checks it
-// against MAME's)
-wire signed [17:0] snd_g = $signed(snd14) * 18'sd12;
+// MAME's level: a voice's 12-bit signal at full volume is full scale over
+// 2048 (okim6295's add_int, routed at 1.0), so jt6295's sum times 16,
+// clamped as MAME's WAV is. Against MAME's -wavwrite over the race: 1.005
+// (jlrh's times 12 was 0.75). Four voices at full volume could clip; the
+// race peaks at 20,272, MAME's WAV at 19,626.
+wire signed [17:0] snd_g = $signed(snd14) * 18'sd16;
 assign snd = snd_g >  18'sd32767 ?  16'sd32767 :
              snd_g < -18'sd32768 ? -16'sd32768 : snd_g[15:0];
 
