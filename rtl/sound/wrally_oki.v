@@ -39,6 +39,25 @@ module wrally_oki (
     end
 `endif
 
+    // A stop command silences its channels at once in MAME (the status read
+    // straight after shows them stopped); jt6295 stops a channel at its next
+    // slot, so for a few microseconds its status still shows it playing.
+    // `stopping` masks those channels until jt6295 has stopped them. A start's
+    // second byte names channels too: they are not masked.
+    wire [7:0] jt_dout;
+    reg        cmd2 = 1'b0;
+    reg  [3:0] stopping = 4'd0;
+    always @(posedge clk) begin
+        if (rst) begin
+            cmd2 <= 1'b0; stopping <= 4'd0;
+        end else if (wr_pulse) begin
+            if (cmd2)        begin cmd2 <= 1'b0; stopping <= stopping & ~din[7:4]; end
+            else if (din[7]) cmd2 <= 1'b1;
+            else             stopping <= stopping | din[6:3];
+        end else stopping <= stopping & jt_dout[3:0];
+    end
+    assign dout = {jt_dout[7:4], jt_dout[3:0] & ~stopping};
+
     jt6295 #(.INTERPOL(0), .SAMPLE(0)) u_oki (
         .rst      ( rst         ),
         .clk      ( clk         ),
@@ -46,7 +65,7 @@ module wrally_oki (
         .ss       ( 1'b1        ),
         .wrn      ( wrn         ),
         .din      ( din         ),
-        .dout     ( dout        ),
+        .dout     ( jt_dout     ),
         .rom_addr ( core_addr   ),
         .rom_data ( sample_data ),
         .rom_ok   ( sample_ok   ),
