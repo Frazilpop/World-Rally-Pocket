@@ -36,7 +36,8 @@ module wrally_addr_decode (
     assign cs_wheel    = blk_70 & (addr[7:1] == 7'h02);
     assign cs_system   = blk_70 & (addr[7:1] == 7'h04);
 
-    assign cs_outlatch = blk_70 & (addr[7:1] == 7'h05);
+    // the LS259: 70000b with A4-A6 choosing the latch (MAME's select 0x70)
+    assign cs_outlatch = blk_70 & ~addr[7] & (addr[3:1] == 3'b101);
     assign cs_okibank  = blk_70 & (addr[7:1] == 7'h06);
     assign cs_oki      = blk_70 & (addr[7:1] == 7'h07);
 

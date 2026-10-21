@@ -37,7 +37,7 @@ module wrally_inputs (
         coin2,
         coin1,
         p1_btn1,
-        p1_gear,
+        ~p1_gear,       // active high (MAME: IP_ACTIVE_HIGH, reads 0 at rest)
         p1_left,
         p1_right,
         p1_down,
