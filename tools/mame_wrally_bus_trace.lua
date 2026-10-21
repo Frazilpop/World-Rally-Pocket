@@ -40,7 +40,9 @@
 --                        The taps go in only then, so the frames before run
 --                        at MAME's own speed.
 --   BUS_TRACE_DATA_ONLY  1 = skip instruction fetches: tap only 100000-ffffff
---                        (everything but the program ROM). ~5x fewer Lua calls.
+--                        (everything but the program ROM) and the autovectors
+--                        at 000060-00007f, so an IRQ's entry still shows.
+--                        ~5x fewer Lua calls.
 --   BUS_TRACE_MCU_OUT    the DS5002FP file (see above); "none" to skip it
 --   BUS_TRACE_MCU_SRAM   1 = the DS5002FP's SRAM accesses too
 --   BUS_TRACE_TICKS      a file: the machine time of each 68000 access, in
@@ -113,7 +115,7 @@ print(fmt("bus trace: %s, script at machine time %.6f, PC %06x, %s",
           romname, mach.time:as_double(), cpu.state["PC"].value,
           DATA_ONLY and "data only" or "all accesses"))
 
-local ranges = DATA_ONLY and { { 0x100000, 0xffffff } } or { { 0x000000, 0xffffff } }
+local ranges = DATA_ONLY and { { 0x000060, 0x00007f }, { 0x100000, 0xffffff } } or { { 0x000000, 0xffffff } }
 _G.wr_taps = {}
 local function keep(t) _G.wr_taps[#_G.wr_taps + 1] = t end
 local function install()
