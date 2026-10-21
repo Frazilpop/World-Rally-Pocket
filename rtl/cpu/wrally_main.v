@@ -158,7 +158,7 @@ module wrally_main (
             cs_vregs: iEdb = vregs[addr[2:1]];
             cs_wram:  iEdb = wram_cpu_q;
             cs_dsw:   iEdb = in_dsw;
-            cs_p1p2:  iEdb = in_p1p2;
+            cs_p1p2:  iEdb = in_p1p2 | {8'h00, ~outlatch[1:0], 6'h00};
             cs_wheel: iEdb = in_wheel;
             cs_system:iEdb = in_system;
             cs_oki:   iEdb = {8'hFF, oki_dout};
@@ -266,11 +266,15 @@ module wrally_main (
         end
     end
 
+    // Q0 and Q1 low lock the coin mechanisms out: a coin is turned back and
+    // its switch never closes. MAME (coin_lockout, on by default) reads the
+    // coin as not pressed then, and so does this.
     wire [3:0] okibank;
+    wire [7:0] outlatch;
     wrally_iolatch u_iolatch (
         .clk(clk), .reset(rst),
         .cs_outlatch(outlatch_stb), .outlatch_a(addr[6:4]), .outlatch_d0(bus_lo[0]),
-        .outlatch(),
+        .outlatch(outlatch),
         .cs_okibank(okibank_stb), .okibank_in(bus_lo[3:0]), .okibank(okibank),
         .flip_screen(flip_screen)
     );
