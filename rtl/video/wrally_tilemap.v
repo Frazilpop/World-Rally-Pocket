@@ -20,7 +20,8 @@ module wrally_tilemap (
 
     output reg  [3:0]  pen,
     output reg  [4:0]  color,
-    output reg         prio
+    output reg         prio,
+    output wire        late     // a tile half left without its own line latched
 );
 
     reg [9:0] tmx_r; reg [8:0] tmy_r;
@@ -64,6 +65,22 @@ module wrally_tilemap (
         if (col1[3]) begin gh07[wpar]<=d_i07; gh09[wpar]<=d_i09; gh11[wpar]<=d_i11; gh13[wpar]<=d_i13; end
         else         begin gl07[wpar]<=d_i07; gl09[wpar]<=d_i09; gl11[wpar]<=d_i11; gl13[wpar]<=d_i13; end
     end
+
+    // For the platform's diagnostics: when the fetch moves on to the next
+    // half (its slot, {half, parity}, changes), the half it leaves should
+    // have been latched from the address it ended on. A half's first pixel
+    // is shown about as the fetch leaves it, so one that was not came late
+    // from the SDRAM. (A half's first clock asks for {old code, new half}
+    // until the VRAM word arrives; that fetch is thrown away by design.)
+    reg  [18:0] lat_a = 19'd0, prev_a = 19'd0;
+    reg  [1:0]  prev_slot = 2'd0;
+    wire [1:0]  slot = {col1[3], wpar};
+    always @(posedge clk) if (ce) begin
+        if (gfx_ok) lat_a <= rom_a;
+        prev_a    <= rom_a;
+        prev_slot <= slot;
+    end
+    assign late = ce && slot != prev_slot && lat_a != prev_a;
 
     reg [4:0] color_d; reg prio_d; reg [3:0] col_d; reg par_d;
     always @(posedge clk) if (ce) begin

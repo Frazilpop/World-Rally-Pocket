@@ -32,7 +32,8 @@ module wrally_video_top #(
     output wire        hsync, vsync, hblank, vblank, de,
     output wire        ce_pix_o,
     output wire        vblank_irq,
-    output wire        spr_cut      // a sprite line cut short (the platform's diagnostics)
+    output wire        spr_cut,     // a sprite line cut short (the platform's diagnostics)
+    output wire        tm_late      // a visible tile half fetched late (likewise)
 );
 
     localparam integer GFXLEAD = 7;
@@ -59,7 +60,8 @@ module wrally_video_top #(
         .d1_i07(d1_i07), .d1_i09(d1_i09), .d1_i11(d1_i11), .d1_i13(d1_i13),
         .gfx_ok0(gfx0_ok), .gfx_ok1(gfx1_ok),
         .pal_a(pal_a), .pal_q(pal_q),
-        .r(r_tm), .g(g_tm), .b(b_tm), .tile_level(tile_level), .tidx_pre(tidx_pre)
+        .r(r_tm), .g(g_tm), .b(b_tm), .tile_level(tile_level), .tidx_pre(tidx_pre),
+        .tm_late(tm_late)
     );
 
     wire [11:0] sp_lbq;

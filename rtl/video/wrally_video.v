@@ -33,7 +33,9 @@ module wrally_video (
 
     output reg  [2:0]  tile_level,
 
-    output reg  [9:0]  tidx_pre
+    output reg  [9:0]  tidx_pre,
+
+    output wire        tm_late      // a visible tile half fetched late (diagnostics)
 );
 
     // The tilemap position of the pixel hpos fetches for. The last 32 of
@@ -59,21 +61,23 @@ module wrally_video (
     wire [3:0] pen0, pen1;
     wire [4:0] color0, color1;
     wire       prio0, prio1;
+    wire       late0, late1;
 
     wrally_tilemap u_l0 (
         .clk(clk), .ce(ce), .tmx(t0x), .tmy(t0y), .layer(1'b0),
         .vram_a(vram_a0), .vram_q(vram_q0),
         .rom_a(rom_a0), .d_i07(d0_i07), .d_i09(d0_i09), .d_i11(d0_i11), .d_i13(d0_i13),
         .gfx_ok(gfx_ok0),
-        .pen(pen0), .color(color0), .prio(prio0)
+        .pen(pen0), .color(color0), .prio(prio0), .late(late0)
     );
     wrally_tilemap u_l1 (
         .clk(clk), .ce(ce), .tmx(t1x), .tmy(t1y), .layer(1'b1),
         .vram_a(vram_a1), .vram_q(vram_q1),
         .rom_a(rom_a1), .d_i07(d1_i07), .d_i09(d1_i09), .d_i11(d1_i11), .d_i13(d1_i13),
         .gfx_ok(gfx_ok1),
-        .pen(pen1), .color(color1), .prio(prio1)
+        .pen(pen1), .color(color1), .prio(prio1), .late(late1)
     );
+    assign tm_late = (late0 | late1) && hpos < 10'd368;
 
     reg [8:0] tidx; reg [2:0] tlvl;
     always @* begin
