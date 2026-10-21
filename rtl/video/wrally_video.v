@@ -36,8 +36,17 @@ module wrally_video (
     output reg  [9:0]  tidx_pre
 );
 
-    wire [16:0] X = {7'b0, hpos} + 17'd8;
-    wire [16:0] Y = {8'b0, vpos} + 17'd16;
+    // The tilemap position of the pixel hpos fetches for. The last 32 of
+    // hblank's (hpos 481-512 of 513) are the 32 to the left of the next
+    // line's first: a tile half at the left edge then has the whole half
+    // to fetch in, however little of it shows (jlrh's counted on from 520,
+    // and a first pixel that was a half's last, scroll x 0x447, came a
+    // clock too soon for the SDRAM and took the half before's colour).
+    wire        lead = hpos >= 10'd481;
+    wire [16:0] X = lead ? {7'b0, hpos} + 17'd519              // hpos - 513 + 8
+                         : {7'b0, hpos} + 17'd8;
+    wire [16:0] Y = lead ? (vpos == 9'd259 ? 17'd16 : {8'b0, vpos} + 17'd17)
+                         : {8'b0, vpos} + 17'd16;
     wire [16:0] s0x = X + {1'b0, vreg_l0x} + 17'd4;
     wire [16:0] s0y = Y + {1'b0, vreg_l0y};
     wire [16:0] s1x = X + {1'b0, vreg_l1x};
@@ -90,33 +99,6 @@ module wrally_video (
         tlvl_d1 <= tlvl; tile_level <= tlvl_d1;
         tidx_pre <= {1'b0, tidx};
     end
-
-`ifdef BAR_TMDBG
-
-    always @(posedge clk) if (ce) begin
-        if (vpos>=9'd129 && vpos<=9'd179 && tidx==9'h11e)
-            $display("BARRED vpos=%0d hpos=%0d | pen1=%h col1=%h pr1=%b vram_q1=%h gfx_ok1=%b | pen0=%h col0=%h pr0=%b | tidx=%h",
-                     vpos, hpos, pen1, color1, prio1, vram_q1, gfx_ok1, pen0, color0, prio0, tidx);
-    end
-`endif
-
-`ifdef SIMULATION
-
-    reg [9:0] fcnt=0; reg vpd=0;
-    always @(posedge clk) if (ce) begin
-        if (vpos==9'd0 && !vpd) fcnt <= fcnt + 1'b1;
-        vpd <= (vpos==9'd0);
-        if (fcnt<31 && fcnt>=10) begin
-            if (vpos==9'd200 && hpos==10'd35)
-                $display("PIXDBG f=%0d BG  vram_a1=%h vram_q1=%h | vram_a0=%h vram_q0=%h | pen1=%h col1=%h pen0=%h col0=%h tidx=%h",
-                         fcnt, vram_a1, vram_q1, vram_a0, vram_q0, pen1,color1, pen0,color0, tidx);
-            if (vpos==9'd80 && hpos==10'd180)
-                $display("PIXDBG f=%0d VREGS L0y=%h L0x=%h L1y=%h L1x=%h (MAME: fff0 8045 ffef 0046)",
-                         fcnt, vreg_l0y, vreg_l0x, vreg_l1y, vreg_l1x);
-        end
-    end
-`endif
-
 endmodule
 
 `default_nettype wire
