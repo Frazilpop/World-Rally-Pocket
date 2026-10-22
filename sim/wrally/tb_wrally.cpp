@@ -5,7 +5,7 @@
 //       [--rom-lat N] [--trace file] [--trace-count N] [--trace-from F]
 //       [--mcu-trace file] [--data-only] [--inputs plan.txt] [--dsw hex]
 //       [--release N] [--gen-dir dir] [--ticks file] [--audio file]
-//       [--wlog file] [--mem-dump frames] [--scene dumpdir]
+//       [--wlog file] [--late-log file] [--mem-dump frames] [--scene dumpdir]
 //
 // Hosts wrally_board the way the Pocket shell does, with a behavioural
 // SDRAM: the .rom image on five independent line ports, fixed latency
@@ -45,6 +45,8 @@
 // sprite RAM with the video line and pixel it landed on and the word stored
 // after it (the VRAM's decrypted; 0 for the IRQ clear):
 // "<frame> <line> <pixel> <addr> <data> <mask> <stored>".
+// --late-log writes every late tilemap fetch the overlay counts (diag_tm_ovr,
+// from frame 2) with the video line and pixel it fell on: "<frame> <line> <pixel>".
 // --mem-dump N,M,... writes vram_NNNNN.bin, palette_NNNNN.bin,
 // spriteram_NNNNN.bin and vregs_NNNNN.bin at frame N's IRQ, as
 // tools/mame_wrally_dump.lua's vram.bin, palette.bin, spriteram.bin and
@@ -112,7 +114,7 @@ int main(int argc, char** argv) {
     if (argc < 4) {
         fprintf(stderr, "usage: %s set.rom frames outdir [dumps] [--rom-lat N] [--trace f] "
                         "[--trace-count N] [--trace-from F] [--mcu-trace f] [--data-only] [--inputs plan] "
-                        "[--dsw hex] [--release N] [--gen-dir d] [--ticks f] [--audio f] [--wlog f]\n", argv[0]);
+                        "[--dsw hex] [--release N] [--gen-dir d] [--ticks f] [--audio f] [--wlog f] [--late-log f]\n", argv[0]);
         return 2;
     }
     std::string rom_path = absolute(argv[1]);
@@ -120,7 +122,7 @@ int main(int argc, char** argv) {
     std::string outdir = absolute(argv[3]);
     std::set<int> dumps, mem_dumps;
     int rom_lat = 10;
-    std::string trace_path, mcu_path, ticks_path, inputs_path, audio_path, wlog_path, scene_dir, gen_dir = absolute("build/gen");
+    std::string trace_path, mcu_path, ticks_path, inputs_path, audio_path, wlog_path, late_path, scene_dir, gen_dir = absolute("build/gen");
     long trace_count = 0;
     int trace_from = 0;
     bool data_only = false;
@@ -140,6 +142,7 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--gen-dir") && i + 1 < argc)     gen_dir = absolute(argv[++i]);
         else if (!strcmp(argv[i], "--audio") && i + 1 < argc)       audio_path = absolute(argv[++i]);
         else if (!strcmp(argv[i], "--wlog") && i + 1 < argc)        wlog_path = absolute(argv[++i]);
+        else if (!strcmp(argv[i], "--late-log") && i + 1 < argc)    late_path = absolute(argv[++i]);
         else if (!strcmp(argv[i], "--scene") && i + 1 < argc)       scene_dir = absolute(argv[++i]);
         else if (!strcmp(argv[i], "--mem-dump") && i + 1 < argc) {
             std::string s = argv[++i];
@@ -431,6 +434,7 @@ int main(int argc, char** argv) {
     int owed_max = 0;
     FILE* audio = audio_path.empty() ? nullptr : fopen(audio_path.c_str(), "wb");
     FILE* wlog = wlog_path.empty() ? nullptr : fopen(wlog_path.c_str(), "w");
+    FILE* llog = late_path.empty() ? nullptr : fopen(late_path.c_str(), "w");
     long audio_n = 0;
     uint64_t bus_cycles = 0, bus_cycles_f = 0;
     long mcu_f = 0;
@@ -457,6 +461,8 @@ int main(int argc, char** argv) {
         }
         bclk += R.wrally_board__DOT__dbg_cen;
         if (frame >= 2) { tm_late += t->diag_tm_ovr; diag_cut += t->diag_spr_cut; }
+        if (llog && frame >= 2 && t->diag_tm_ovr)
+            fprintf(llog, "%d %d %d\n", frame, (int)R.wrally_board__DOT__dbg_vcnt, (int)R.wrally_board__DOT__dbg_hcnt);
         if ((int)t->diag_owed > owed_max) owed_max = t->diag_owed;
         lost += R.wrally_board__DOT__dbg_lost;
         if (ticks && R.wrally_board__DOT__dbg_irq) fprintf(ticks, "# irq %llu\n", (unsigned long long)bclk);
@@ -583,6 +589,7 @@ int main(int argc, char** argv) {
     if (ticks) fclose(ticks);
     if (audio) fclose(audio);
     if (wlog) fclose(wlog);
+    if (llog) fclose(llog);
     fclose(stats);
     fprintf(stderr, "board ticks lost %ld, longest waits (clocks) program %d tilemap0 %d tilemap1 %d "
                     "sprites %d oki %d\n",

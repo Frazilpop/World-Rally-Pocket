@@ -77,7 +77,10 @@ module wrally_video (
         .gfx_ok(gfx_ok1),
         .pen(pen1), .color(color1), .prio(prio1), .late(late1)
     );
-    assign tm_late = (late0 | late1) && hpos < 10'd368;
+    // Counted on the picture's lines only: in vblank the game's IRQ 6 code
+    // writes the scroll (line 233) and moves a half's address under the
+    // fetch, which shows nothing.
+    assign tm_late = (late0 | late1) && hpos < 10'd368 && vpos < 9'd232;
 
     reg [8:0] tidx; reg [2:0] tlvl;
     always @* begin
