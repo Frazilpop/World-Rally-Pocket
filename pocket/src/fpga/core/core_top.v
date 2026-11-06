@@ -777,12 +777,20 @@ kaneko_sdram #(
     // JEDEC power-up: 200 us of NOP before the first command; the init
     // sequence counts down from here and starts at 400, so 25000 is 256 us.
     .INIT_NOP (25000),
-    // Every board port has a deadline: 0 the 68000's program holds board
-    // time while it waits, 1 and 2 the tilemaps must bring a tile half in
-    // its eight pixels and 3 the sprites a line in a line, and 4 the OKI's
-    // ADPCM reads have no wait at all (jt6295 takes the byte at its slot).
-    // Only 5, the read-back check, waits.
-    .URGENT   (6'b01_1111)
+    // ONLY THE TILEMAPS ARE URGENT. A tilemap must bring a tile's line
+    // within 45 clocks (48 MHz, request to ack) or the tile half shows the
+    // tile before's pixels (scene f01500 at fixed latency: 0 late at 45,
+    // 178 at 46). With all five board ports urgent, a tile request could
+    // queue behind the program, the sprites and the OKI in turn and a
+    // refresh: on the card tilemap 1 reached 46 and seven halves came late
+    // in a ten-minute session. Ahead of the rest, the two tilemaps wait at
+    // most for the transfer in flight, each other and a refresh: 23 and 30
+    // clocks under sim/wrally/sdr_stress.cpp's load, where all-urgent gave
+    // 44. The others have their own slack: the program holds board time
+    // (4,095 ticks of credit), the sprites a line in a line (3,077 clocks),
+    // and jt6295 takes its ADPCM byte one 32x-sample step (about 190
+    // clocks) after it sets the address. Port 5, the read-back, last.
+    .URGENT   (6'b00_0110)
 ) u_sdram (
     .clk       (clk_sdram),
     .rst_n     (sdram_rst_n),

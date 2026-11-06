@@ -11,7 +11,8 @@
 # here with jtframe's ucode tool (Go) into build/gen/jt8051.
 # SDR=real times the ROM lines with the shell's SDRAM controller
 # (sim/wrally/sdr_timing.sv, built first as its own model) instead of the
-# harness's fixed latency.
+# harness's fixed latency; SDR_URGENT=<6 bits> another URGENT mask than
+# core_top.v's.
 set -euo pipefail
 JR=third_party/jtcores/modules/jtframe/hdl/ram
 J8=third_party/jtcores/modules/jt8051
@@ -30,7 +31,7 @@ SDRG=()
 if [ "${SDR:-}" = real ]; then
   SO="${OBJ}_sdr"
   verilator --cc -O3 --x-assign fast --x-initial 0 -Wno-fatal -Wno-lint -Wno-style \
-    --top-module sdr_timing --prefix Vsdr_timing --Mdir "$SO" \
+    --top-module sdr_timing --prefix Vsdr_timing --Mdir "$SO" ${SDR_URGENT:+-GURGENT=6\'b$SDR_URGENT} \
     sim/wrally/sdr_timing.sv rtl/mem/kaneko_sdram_x2.sv rtl/mem/kaneko_sdram.sv sim/mem/sdram_model.sv
   make -s -C "$SO" -f Vsdr_timing.mk Vsdr_timing__ALL.a OPT_FAST=-O2
   SDRG=(-CFLAGS -DSDR_REAL -CFLAGS "-I$PWD/$SO" "$PWD/$SO/Vsdr_timing__ALL.a")

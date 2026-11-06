@@ -1,9 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // World Rally (Pocket) — the shell's SDRAM path, for the harness's timing.
 //
-// kaneko_sdram_x2 and kaneko_sdram as core_top.v sets them up (five ports:
-// the board's five and the shell's read-back of line 0, URGENT 01_1111,
-// T_REFI 700, T_RC 11), in front of sdram_model. sim/wrally/build.sh with
+// kaneko_sdram_x2 and kaneko_sdram as core_top.v sets them up (six ports:
+// the board's five and the shell's read-back of line 0, URGENT 00_0110,
+// T_REFI 700, T_RC 11, the read captured at CL+2), in front of
+// sdram_model. The capture depth is the card's, not the model's (CL+1):
+// the data is not used here, and the depth sets how long each read holds
+// its bank and the pipeline a refresh waits on – at the model's depth
+// every urgent port's worst wait came out two clocks short of the card's.
+// sim/wrally/build.sh with
 // SDR=real builds this as a second model (Vsdr_timing); tb_wrally clocks it
 // twice per 48 MHz clock and takes only the acknowledges from it: the data
 // still comes from the ROM image, so this answers when a line arrives –
@@ -14,7 +19,9 @@
 
 module sdr_timing #(
     parameter int unsigned NP = 6,
-    parameter int unsigned AW = 25
+    parameter int unsigned AW = 25,
+    parameter logic [NP-1:0] URGENT = 6'b00_0110,   // core_top.v's
+    parameter logic [1:0]    RD_LAT_SEL = 2'd2      // CL+2, core_top.v's
 ) (
     input  wire             clk_fast,       // 96 MHz
     input  wire             rst_n,
@@ -56,10 +63,10 @@ kaneko_sdram #(
     .COL_BITS (10), .NP(NP),
     .T_REFI   (700), .T_RC(11),
     .INIT_NOP (600),                // the power-up wait, shortened
-    .URGENT   (6'b01_1111)
+    .URGENT   (URGENT)
 ) u_ctrl (
     .clk(clk_fast), .rst_n(rst_n), .ready(ready),
-    .rd_lat_sel(2'd0),              // CL+3: sdram_model's phase (the Pocket: CL+2)
+    .rd_lat_sel(RD_LAT_SEL),
     .sd_cke(sd_cke), .sd_cs_n(sd_cs_n), .sd_ras_n(sd_ras_n), .sd_cas_n(sd_cas_n),
     .sd_we_n(sd_we_n), .sd_ba(sd_ba), .sd_a(sd_a), .sd_dqm(sd_dqm),
     .sd_dq_o(sd_dq_o), .sd_dq_oe(sd_dq_oe), .sd_dq_i(sd_dq_i),

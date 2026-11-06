@@ -53,6 +53,8 @@
 // vregs.bin at its notifier N (little-endian words; the VRAM decrypted):
 // shadows kept from the 68000's writes, the VRAM's with the word jlrh's
 // decryption made of each.
+// --inputs takes "pause=N" too: board time stops at the next vblank and
+// starts again N video frames later, as the Pocket menu's pause does.
 // --scene draws a MAME dump (tools/mame_wrally_dump.lua: vram.bin,
 // palette.bin, spriteram.bin, vregs.bin) instead of running the game:
 // board time paused from release, the dump written into the VRAM, the
@@ -351,6 +353,12 @@ int main(int argc, char** argv) {
         fprintf(stderr, "inputs: %zu steps from %s\n", plan.size(), inputs_path.c_str());
     }
     uint8_t p1v = 0;
+    // pause=N: the Pocket menu's pause as core_top.v makes it – board time
+    // stops at the next vblank and starts again at the vblank N video frames
+    // later (frames here count IRQ 6, which stops with board time).
+    int pause_want = 0, pause_left = 0;
+    bool vb_prev = false;
+    long pauses = 0;
     auto apply_inputs = [&](int fr) {
         while (plan_i < plan.size() && plan[plan_i].frame <= fr) {
             const Step& st = plan[plan_i++];
@@ -366,7 +374,7 @@ int main(int argc, char** argv) {
             else if (st.name == "start")   { t->start   = st.val ? 1 : 0; continue; }
             else if (st.name == "test")    { t->test    = st.val ? 1 : 0; continue; }
             else if (st.name == "service") { t->service = st.val ? 1 : 0; continue; }
-            else if (st.name == "pause")   { t->pause   = st.val ? 1 : 0; continue; }
+            else if (st.name == "pause")   { pause_want = st.val; continue; }
             if (bit >= 0) {
                 if (st.val) p1v |= (1u << bit); else p1v &= ~(1u << bit);
                 t->p1 = p1v;
@@ -461,6 +469,14 @@ int main(int argc, char** argv) {
         }
         bclk += R.wrally_board__DOT__dbg_cen;
         if (frame >= 2) { tm_late += t->diag_tm_ovr; diag_cut += t->diag_spr_cut; }
+        const bool vb_rise = R.wrally_board__DOT__dbg_vbirq && !vb_prev;   // high for a pixel
+        vb_prev = R.wrally_board__DOT__dbg_vbirq;
+        if (!scene && vb_rise) {
+            if (t->pause && --pause_left <= 0) t->pause = 0;
+            else if (!t->pause && pause_want > 0) {
+                t->pause = 1; pause_left = pause_want; pause_want = 0; pauses++;
+            }
+        }
         if (llog && frame >= 2 && t->diag_tm_ovr)
             fprintf(llog, "%d %d %d\n", frame, (int)R.wrally_board__DOT__dbg_vcnt, (int)R.wrally_board__DOT__dbg_hcnt);
         if ((int)t->diag_owed > owed_max) owed_max = t->diag_owed;
@@ -598,6 +614,7 @@ int main(int argc, char** argv) {
     if (spr_cut) fprintf(stderr, " (the lowest at sprite %ld)", spr_cut_at);
     fprintf(stderr, "\n");
     fprintf(stderr, "overlay from frame 2: tilemap fetches late %ld, sprite lines cut %ld\n", tm_late, diag_cut);
+    if (pauses) fprintf(stderr, "pauses %ld\n", pauses);
 #ifdef SDR_REAL
     fprintf(stderr, "SDRAM protocol violations: %u\n", sd->violations);
 #endif
