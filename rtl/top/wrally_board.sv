@@ -85,7 +85,8 @@ module wrally_board #(
     // For the platform's diagnostics: board time behind wall time (ticks),
     // IRQ 6's tick, a sprite line begun before the last was drawn (its SDRAM
     // fetches did not finish in a line), a visible tile half left before the
-    // SDRAM brought its line (wrally_tilemap `late`).
+    // SDRAM brought its line though its address stood the whole half
+    // (wrally_video `tm_late`).
     output wire [11:0] diag_owed,
     output wire        diag_irq,
     output wire        diag_spr_cut,
@@ -245,7 +246,6 @@ function automatic [31:0] gfx_planes(input [63:0] line, input h);
 endfunction
 wire [31:0] tm0_p = gfx_planes(tm0_line, tm0_a[4]);
 wire [31:0] tm1_p = gfx_planes(tm1_line, tm1_a[4]);
-wire [31:0] spr_p = gfx_planes(spr_line, spr_ra[4]);
 
 // ================================================================ DS5002FP SRAM
 // Filled from the image's ds5002 slot as the loader passes, a byte a clock:
@@ -330,7 +330,7 @@ wrally_video_top u_video (
     .gfx0_ok(tm0_ok), .gfx1_ok(tm1_ok),
     .pal_a(pal_a), .pal_q(pal_q), .palb_a(palb_a), .palb_q(palb_q),
     .spr_a(spr_a), .spr_q(spr_q), .srom_a(spr_ra),
-    .sd_i07(spr_p[31:24]), .sd_i09(spr_p[23:16]), .sd_i11(spr_p[15:8]), .sd_i13(spr_p[7:0]),
+    .sgfx_line(spr_line),
     .spr_gfx_ok(spr_ok), .spr_en(1'b1),
     .vga_r(r), .vga_g(g), .vga_b(b),
     .hsync(hs), .vsync(vs), .hblank(hblank), .vblank(vblank), .de(),
@@ -367,6 +367,10 @@ wire [8:0]  dbg_vcnt   /*verilator public_flat_rd*/ = u_video.u_timing.vcnt;
 wire        dbg_spr_start /*verilator public_flat_rd*/ = u_video.u_spr.start;
 wire        dbg_spr_busy  /*verilator public_flat_rd*/ = u_video.u_spr.u_spr.busy;
 wire [10:0] dbg_spr_idx   /*verilator public_flat_rd*/ = u_video.u_spr.u_spr.spr_idx;
+wire        dbg_tm_late0  /*verilator public_flat_rd*/ = u_video.u_video.late0;
+wire        dbg_tm_late1  /*verilator public_flat_rd*/ = u_video.u_video.late1;
+wire [5:0]  dbg_tm_age0   /*verilator public_flat_rd*/ = u_video.u_video.age0;
+wire [5:0]  dbg_tm_age1   /*verilator public_flat_rd*/ = u_video.u_video.age1;
 `endif
 
 endmodule

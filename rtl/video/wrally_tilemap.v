@@ -21,7 +21,8 @@ module wrally_tilemap (
     output reg  [3:0]  pen,
     output reg  [4:0]  color,
     output reg         prio,
-    output wire        late     // a tile half left without its own line latched
+    output wire        late,    // a tile half left without its own line latched
+    output reg  [5:0]  late_age // clocks the address it ended on had stood, at its last pixel
 );
 
     reg [9:0] tmx_r; reg [8:0] tmy_r;
@@ -81,6 +82,18 @@ module wrally_tilemap (
         prev_slot <= slot;
     end
     assign late = ce && slot != prev_slot && lat_a != prev_a;
+
+    // How long the address had stood when the half ended, so the platform
+    // can tell a fetch the SDRAM brought late (the address stood the whole
+    // half) from one the game moved under it (a VRAM or scroll write inside
+    // the picture: the address changed a few clocks before the end).
+    reg [18:0] a_d = 19'd0;
+    reg [5:0]  age = 6'd0;
+    always @(posedge clk) begin
+        a_d <= rom_a;
+        age <= (rom_a != a_d) ? 6'd0 : (&age ? age : age + 6'd1);
+        if (ce) late_age <= age;
+    end
 
     reg [4:0] color_d; reg prio_d; reg [3:0] col_d; reg par_d;
     always @(posedge clk) if (ce) begin

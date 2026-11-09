@@ -62,25 +62,32 @@ module wrally_video (
     wire [4:0] color0, color1;
     wire       prio0, prio1;
     wire       late0, late1;
+    wire [5:0] age0, age1;
 
     wrally_tilemap u_l0 (
         .clk(clk), .ce(ce), .tmx(t0x), .tmy(t0y), .layer(1'b0),
         .vram_a(vram_a0), .vram_q(vram_q0),
         .rom_a(rom_a0), .d_i07(d0_i07), .d_i09(d0_i09), .d_i11(d0_i11), .d_i13(d0_i13),
         .gfx_ok(gfx_ok0),
-        .pen(pen0), .color(color0), .prio(prio0), .late(late0)
+        .pen(pen0), .color(color0), .prio(prio0), .late(late0), .late_age(age0)
     );
     wrally_tilemap u_l1 (
         .clk(clk), .ce(ce), .tmx(t1x), .tmy(t1y), .layer(1'b1),
         .vram_a(vram_a1), .vram_q(vram_q1),
         .rom_a(rom_a1), .d_i07(d1_i07), .d_i09(d1_i09), .d_i11(d1_i11), .d_i13(d1_i13),
         .gfx_ok(gfx_ok1),
-        .pen(pen1), .color(color1), .prio(prio1), .late(late1)
+        .pen(pen1), .color(color1), .prio(prio1), .late(late1), .late_age(age1)
     );
     // Counted on the picture's lines only: in vblank the game's IRQ 6 code
     // writes the scroll (line 233) and moves a half's address under the
-    // fetch, which shows nothing.
-    assign tm_late = (late0 | late1) && hpos < 10'd368 && vpos < 9'd232;
+    // fetch, which shows nothing. And only a half whose address stood for
+    // 40 clocks or more, so the count means the SDRAM was slow: a half's
+    // address stands 45-46 clocks when the fetch has its whole time (scene
+    // f01500 at fixed latency 46 and 50, every late half), while the game's
+    // own VRAM and scroll writes inside the picture move it a few clocks
+    // before the end, too late for any SDRAM.
+    assign tm_late = ((late0 && age0 >= 6'd40) || (late1 && age1 >= 6'd40))
+                     && hpos < 10'd368 && vpos < 9'd232;
 
     reg [8:0] tidx; reg [2:0] tlvl;
     always @* begin

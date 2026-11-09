@@ -45,8 +45,12 @@
 // sprite RAM with the video line and pixel it landed on and the word stored
 // after it (the VRAM's decrypted; 0 for the IRQ clear):
 // "<frame> <line> <pixel> <addr> <data> <mask> <stored>".
-// --late-log writes every late tilemap fetch the overlay counts (diag_tm_ovr,
-// from frame 2) with the video line and pixel it fell on: "<frame> <line> <pixel>".
+// --late-log writes every tile half either tilemap left without its line
+// (wrally_tilemap `late`, from frame 2, in the picture or not) with the
+// video line and pixel it fell on, whether the overlay counts it
+// (diag_tm_ovr: in the picture, the address stood 40 clocks or more) and
+// each layer's late flag and the clocks its address had stood:
+// "<frame> <line> <pixel> <counted> <late0> <age0> <late1> <age1>".
 // --mem-dump N,M,... writes vram_NNNNN.bin, palette_NNNNN.bin,
 // spriteram_NNNNN.bin and vregs_NNNNN.bin at frame N's IRQ, as
 // tools/mame_wrally_dump.lua's vram.bin, palette.bin, spriteram.bin and
@@ -477,8 +481,10 @@ int main(int argc, char** argv) {
                 t->pause = 1; pause_left = pause_want; pause_want = 0; pauses++;
             }
         }
-        if (llog && frame >= 2 && t->diag_tm_ovr)
-            fprintf(llog, "%d %d %d\n", frame, (int)R.wrally_board__DOT__dbg_vcnt, (int)R.wrally_board__DOT__dbg_hcnt);
+        if (llog && frame >= 2 && (t->diag_tm_ovr || R.wrally_board__DOT__dbg_tm_late0 || R.wrally_board__DOT__dbg_tm_late1))
+            fprintf(llog, "%d %d %d %d %d %d %d %d\n", frame, (int)R.wrally_board__DOT__dbg_vcnt, (int)R.wrally_board__DOT__dbg_hcnt,
+                    (int)t->diag_tm_ovr, (int)R.wrally_board__DOT__dbg_tm_late0, (int)R.wrally_board__DOT__dbg_tm_age0,
+                    (int)R.wrally_board__DOT__dbg_tm_late1, (int)R.wrally_board__DOT__dbg_tm_age1);
         if ((int)t->diag_owed > owed_max) owed_max = t->diag_owed;
         lost += R.wrally_board__DOT__dbg_lost;
         if (ticks && R.wrally_board__DOT__dbg_irq) fprintf(ticks, "# irq %llu\n", (unsigned long long)bclk);

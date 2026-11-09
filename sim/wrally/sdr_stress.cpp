@@ -2,7 +2,7 @@
 // World Rally (Pocket) — the shell's SDRAM path under a worst-case load.
 //
 //   sim/wrally/build_stress.sh [urgent]   (builds build/obj_stress_<urgent>_2/sdr_stress)
-//   sdr_stress <frames> [seed]
+//   sdr_stress <frames> [seed] [sprites a line]
 //
 // sdr_timing (kaneko_sdram_x2, kaneko_sdram, sdram_model, as core_top.v
 // sets them up) driven by five requesters that behave as the board's do –
@@ -15,7 +15,13 @@
 //               line before to the picture's right edge, on all 232 lines,
 //               each layer at its own scroll, both changed every frame, so
 //               the two layers' fetches meet at every spacing
-//   3 sprites   asks again 1-4 clocks after each line for 95% of every line
+//   3 sprites   asks again 1-4 clocks after each line for 95% of every line;
+//               or, given sprites a line, as wrally_sprite_engine does on
+//               the busiest line in the MAME dumps (41 drawn, 470 slots
+//               passed over): the scanner's 470 clocks first, then each
+//               sprite's line asked for a clock after the drawer takes the
+//               one before, which it draws in 17 clocks. Prints the longest
+//               line the engine would take and the lines over 3,077 (cut).
 //   4 OKI       one line every 50-2,000 clocks
 //   5 read-back one line a frame (the overlay's check of line 0)
 //
@@ -48,6 +54,8 @@ static void setbits(T& w, int lo, int n, uint64_t v) {
 int main(int argc, char** argv) {
     if (argc < 2) { fprintf(stderr, "usage: %s frames [seed]\n", argv[0]); return 2; }
     const int frames = atoi(argv[1]);
+    const int spr_n = argc > 3 ? atoi(argv[3]) : 0;
+    long spr_line_max = 0, spr_cut = 0;
     std::mt19937 rng(argc > 2 ? atoi(argv[2]) : 1);
     auto rnd = [&](int lo, int hi) { return std::uniform_int_distribution<int>(lo, hi)(rng); };
     Verilated::commandArgs(argc, argv);
@@ -71,6 +79,10 @@ int main(int argc, char** argv) {
         for (int v = 0; v < VTOTAL; v++) {
             bool spr_on = true;
             int spr_end = HTOTAL * CLK_PIX * 95 / 100;
+            // the engine: k sprites asked for, the drawer free at draw_free,
+            // the next ask due at ask_at (-1: waiting on a take)
+            int k = 0, draw_free = 0, ask_at = 470 + 3, line_end = 0;
+            bool taken_all = false;
             for (int c = 0; c < HTOTAL * CLK_PIX; c++) {
                 int h = c / CLK_PIX, ph = c % CLK_PIX;
                 // tilemaps: the next line's lead (hpos 481-512 of line VIS-1.. -1) and the picture
@@ -88,7 +100,13 @@ int main(int argc, char** argv) {
                 }
                 // sprites
                 spr_on = c < spr_end;
-                if (spr_on && !p[3].req && p[3].want == 0 && --p[3].gap <= 0) {
+                if (spr_n) {
+                    if (k < spr_n && ask_at >= 0 && c >= ask_at && !p[3].req && p[3].want == 0) {
+                        p[3].want = 1;
+                        p[3].addr = 0x180000 + (rnd(0, 0x3fff) << 6) + (rnd(0, 15) << 2);
+                        ask_at = -1;
+                    }
+                } else if (spr_on && !p[3].req && p[3].want == 0 && --p[3].gap <= 0) {
                     p[3].want = 1;
                     p[3].addr = 0x180000 + (rnd(0, 0x3fff) << 6) + (rnd(0, 15) << 2);
                 }
@@ -125,6 +143,13 @@ int main(int argc, char** argv) {
                             P.req = false; P.held = 0;
                             if (q == 0) P.gap = rnd(1, 16);
                             if (q == 3) P.gap = rnd(1, 4);
+                            if (q == 3 && spr_n) {
+                                // the ack's clock: gfx_ok, taken now or when the drawer frees
+                                int take = c > draw_free ? c : draw_free;
+                                draw_free = take + 17;
+                                if (++k < spr_n) ask_at = take + 1;
+                                else line_end = draw_free;
+                            }
                             if (q == 4) P.gap = rnd(50, 2000);
                         }
                     } else if (P.want > 0) {
@@ -133,8 +158,15 @@ int main(int argc, char** argv) {
                     }
                 }
             }
+            if (spr_n) {
+                if (k < spr_n) line_end = HTOTAL * CLK_PIX + 1;   // not even asked for in the line
+                if (line_end > spr_line_max) spr_line_max = line_end;
+                if (line_end > HTOTAL * CLK_PIX - 1) spr_cut++;
+            }
         }
     }
+    if (spr_n) printf("engine, %d sprites a line: longest line %ld clocks of %d, %ld lines over\n",
+                      spr_n, spr_line_max, HTOTAL * CLK_PIX - 1, spr_cut);
     printf("urgent %s, %d frames: longest waits program %ld tilemap0 %ld tilemap1 %ld sprites %ld oki %ld readback %ld\n",
            URGENT_STR, frames, w_max[0], w_max[1], w_max[2], w_max[3], w_max[4], w_max[5]);
     printf("lines served: program %ld tilemaps %ld sprites %ld oki %ld; tilemap fetches held over 40: %ld, over 45: %ld\n",

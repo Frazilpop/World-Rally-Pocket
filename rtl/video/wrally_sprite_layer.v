@@ -14,7 +14,7 @@ module wrally_sprite_layer #(
     input  wire [15:0] spr_q,
 
     output wire [18:0] rom_a,
-    input  wire [7:0]  d_i07, d_i09, d_i11, d_i13,
+    input  wire [63:0] gfx_line,
     input  wire        gfx_ok,
 
     output wire [11:0] lb_q,
@@ -41,12 +41,12 @@ module wrally_sprite_layer #(
     assign cut = start & busy;
 
     wrally_sprite_engine u_spr (
-        .clk(clk), .ce(1'b1), .gfx_ok(gfx_ok),
+        .clk(clk), .gfx_ok(gfx_ok),
         .start(start), .line(next_vpos + 9'd16),
-        .busy(busy), .done(),
+        .busy(busy),
         .spr_a(spr_a), .spr_q(spr_q),
-        .rom_a(rom_a), .d_i07(d_i07), .d_i09(d_i09), .d_i11(d_i11), .d_i13(d_i13),
-        .lb_x(hpos), .lb_q(lb_q), .lb_high(lb_high),
+        .rom_a(rom_a), .gfx_line(gfx_line),
+        .lb_x(hpos), .lb_clr(ce_pix && hpos < 10'd368), .lb_q(lb_q), .lb_high(lb_high),
         .wbank(wbank), .rbank(rbank)
     );
 endmodule

@@ -24,7 +24,7 @@ module wrally_video_top #(
     output wire [12:0] palb_a,   input  wire [15:0] palb_q,
 
     output wire [10:0] spr_a,    input  wire [15:0] spr_q,
-    output wire [18:0] srom_a,   input  wire [7:0]  sd_i07, sd_i09, sd_i11, sd_i13,
+    output wire [18:0] srom_a,   input  wire [63:0] sgfx_line,
     input  wire        spr_gfx_ok,
     input  wire        spr_en,
 
@@ -73,7 +73,7 @@ module wrally_video_top #(
     wrally_sprite_layer #(.VVIS(232), .VTOTAL(260)) u_spr (
         .clk(clk), .rst(rst), .ce_pix(ce_pix), .vpos(vpos), .hpos(hpos),
         .spr_a(spr_a), .spr_q(spr_q),
-        .rom_a(srom_a), .d_i07(sd_i07), .d_i09(sd_i09), .d_i11(sd_i11), .d_i13(sd_i13),
+        .rom_a(srom_a), .gfx_line(sgfx_line),
         .gfx_ok(spr_gfx_ok),
         .lb_q(sp_lbq), .lb_high(sp_lbq_high), .busy(), .cut(spr_cut)
     );

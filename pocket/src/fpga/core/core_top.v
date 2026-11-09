@@ -787,7 +787,9 @@ kaneko_sdram #(
     // most for the transfer in flight, each other and a refresh: 23 and 30
     // clocks under sim/wrally/sdr_stress.cpp's load, where all-urgent gave
     // 44. The others have their own slack: the program holds board time
-    // (4,095 ticks of credit), the sprites a line in a line (3,077 clocks),
+    // (4,095 ticks of credit); the sprite engine fetches a sprite's line
+    // while it draws the one before, so even at 45 clocks a fetch the
+    // busiest line in the MAME dumps (41 sprites) takes 2,148 of its 3,077;
     // and jt6295 takes its ADPCM byte one 32x-sample step (about 190
     // clocks) after it sets the address. Port 5, the read-back, last.
     .URGENT   (6'b00_0110)
@@ -932,7 +934,9 @@ wrally_board #(.SDR_AW(SDR_AW), .NP(NP)) u_board (
 //   11 a sprite line was cut short: its SDRAM fetches did not finish in
 //      the line (should stay red)
 //   12 a tilemap fetch came late: the tilemap moved on to its next tile
-//      half before the SDRAM brought the last (should stay red)
+//      half before the SDRAM brought the last, its address having stood
+//      the whole half (should stay red; a half the game's own write moved
+//      inside the picture is not counted)
 //   13 IRQ 6 fell inside the picture, where the game's scroll and sprite
 //      writes would tear it (should stay red)
 //   14 board time fell a whole credit (4,095 ticks) behind and lost ticks
@@ -947,7 +951,7 @@ wrally_board #(.SDR_AW(SDR_AW), .NP(NP)) u_board (
 //   3 high half: longest wait on port 1 (tilemap 0); low half: port 2
 //     (tilemap 1)
 //   4 high half: longest wait on port 4 (the OKI); low half: tilemap
-//     fetches that came late
+//     fetches that came late (flag 12's)
 //   5 high half: sprite lines cut short; low half: the line of the picture
 //     (counted from vblank's start, 0 = its first line) the last IRQ 6 fell on
 //   6 words 1,0 of line 0 as SDRAM reads them back    7 words 3,2 as read back
