@@ -9,8 +9,8 @@
             "description": "Gaelco's World Rally Championship",
             "author": "frazilpop",
             "url": "https://github.com/Frazilpop/World-Rally-Pocket",
-            "version": "0.0.0",
-            "date_release": "2026-10-20"
+            "version": "1.0.0",
+            "date_release": "2026-11-10"
         },
         "framework": {
             "target_product": "Analogue Pocket",
